@@ -18,7 +18,7 @@ module Ransack
     end
 
     def visit_Ransack_Nodes_Grouping(object)
-      if object.combinator == Ransack::Constants::OR
+      if object.combinator == Constants::OR
         visit_or(object)
       else
         visit_and(object)
@@ -54,7 +54,7 @@ module Ransack
 
     DISPATCH = Hash.new do |hash, klass|
       hash[klass] = "visit_#{
-        klass.name.gsub('::'.freeze, Ransack::Constants::UNDERSCORE)
+        klass.name.gsub(Constants::TWO_COLONS, Constants::UNDERSCORE)
         }"
     end
 

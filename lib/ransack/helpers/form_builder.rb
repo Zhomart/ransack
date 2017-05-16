@@ -1,11 +1,9 @@
 require 'action_view'
 
-# This patch is needed since this Rails commit:
-# https://github.com/rails/rails/commit/c1a118a
-#
-# TODO: Find a better way to solve this.
-#
 module ActionView::Helpers::Tags
+  # TODO: Find a better way to solve this issue!
+  # This patch is needed since this Rails commit:
+  # https://github.com/rails/rails/commit/c1a118a
   class Base
     private
     def value(object)
@@ -17,8 +15,7 @@ end
 RANSACK_FORM_BUILDER = 'RANSACK_FORM_BUILDER'.freeze
 
 require 'simple_form' if
-  (ENV[RANSACK_FORM_BUILDER] || Ransack::Constants::EMPTY)
-  .match('SimpleForm'.freeze)
+  (ENV[RANSACK_FORM_BUILDER] || ''.freeze).match('SimpleForm'.freeze)
 
 module Ransack
   module Helpers
@@ -44,13 +41,12 @@ module Ransack
       def attribute_select(options = nil, html_options = nil, action = nil)
         options = options || {}
         html_options = html_options || {}
-        action = action || Ransack::Constants::SEARCH
+        action = action || Constants::SEARCH
         default = options.delete(:default)
         raise ArgumentError, formbuilder_error_message(
           "#{action}_select") unless object.respond_to?(:context)
         options[:include_blank] = true unless options.has_key?(:include_blank)
-        bases = [Ransack::Constants::EMPTY] +
-          association_array(options[:associations])
+        bases = [''.freeze].freeze + association_array(options[:associations])
         if bases.size > 1
           collection = attribute_collection_for_bases(action, bases)
           object.name ||= default if can_use_default?(
@@ -67,13 +63,15 @@ module Ransack
       end
 
       def sort_direction_select(options = {}, html_options = {})
-        raise ArgumentError, formbuilder_error_message(
-          'sort_direction'.freeze) unless object.respond_to?(:context)
+        unless object.respond_to?(:context)
+          raise ArgumentError,
+          formbuilder_error_message('sort_direction'.freeze)
+        end
         template_collection_select(:dir, sort_array, options, html_options)
       end
 
       def sort_select(options = {}, html_options = {})
-        attribute_select(options, html_options, Ransack::Constants::SORT) +
+        attribute_select(options, html_options, 'sort'.freeze) +
         sort_direction_select(options, html_options)
       end
 
@@ -83,6 +81,10 @@ module Ransack
 
       def sort_link(attribute, *args)
         @template.sort_link @object, attribute, *args
+      end
+
+      def sort_url(attribute, *args)
+        @template.sort_url @object, attribute, *args
       end
 
       def condition_fields(*args, &block)
@@ -114,28 +116,29 @@ module Ransack
         objects ||= @object.send(name)
         objects = [objects] unless Array === objects
         name = "#{options[:object_name] || object_name}[#{name}]"
-        output = ActiveSupport::SafeBuffer.new
-        objects.each do |child|
-          output << @template.fields_for("#{name}[#{
-            options[:child_index] || nested_child_index(name)
-            }]", child, options, &block)
+        objects.inject(ActiveSupport::SafeBuffer.new) do |output, child|
+          output << @template.fields_for("#{name}[#{options[:child_index] ||
+          nested_child_index(name)}]", child, options, &block)
         end
-        output
       end
 
       def predicate_select(options = {}, html_options = {})
         options[:compounds] = true if options[:compounds].nil?
-        default = options.delete(:default) || 'cont'.freeze
+        default = options.delete(:default) || Constants::CONT
 
-        keys = options[:compounds] ? Predicate.names :
+        keys =
+        if options[:compounds]
+          Predicate.names
+        else
           Predicate.names.reject { |k| k.match(/_(any|all)$/) }
+        end
         if only = options[:only]
           if only.respond_to? :call
             keys = keys.select { |k| only.call(k) }
           else
             only = Array.wrap(only).map(&:to_s)
             keys = keys.select {
-              |k| only.include? k.sub(/_(any|all)$/, Ransack::Constants::EMPTY)
+              |k| only.include? k.sub(/_(any|all)$/, ''.freeze)
             }
           end
         end
@@ -177,21 +180,21 @@ module Ransack
 
       def sort_array
         [
-          [Ransack::Constants::ASC,  object.translate(Ransack::Constants::ASC)],
-          [Ransack::Constants::DESC, object.translate(Ransack::Constants::DESC)]
-        ]
+          ['asc'.freeze,  object.translate('asc'.freeze)].freeze,
+          ['desc'.freeze, object.translate('desc'.freeze)].freeze
+        ].freeze
       end
 
       def combinator_choices
         if Nodes::Condition === object
           [
-            [Ransack::Constants::OR,  Translate.word(:any)],
-            [Ransack::Constants::AND, Translate.word(:all)]
+            [Constants::OR,  Translate.word(:any)],
+            [Constants::AND, Translate.word(:all)]
           ]
         else
           [
-            [Ransack::Constants::AND, Translate.word(:all)],
-            [Ransack::Constants::OR,  Translate.word(:any)]
+            [Constants::AND, Translate.word(:all)],
+            [Constants::OR,  Translate.word(:any)]
           ]
         end
       end
@@ -199,8 +202,7 @@ module Ransack
       def association_array(obj, prefix = nil)
         ([prefix] + association_object(obj))
         .compact
-        .flatten
-        .map { |v| [prefix, v].compact.join(Ransack::Constants::UNDERSCORE) }
+        .flat_map { |v| [prefix, v].compact.join(Constants::UNDERSCORE) }
       end
 
       def association_object(obj)
@@ -220,7 +222,7 @@ module Ransack
           when Array, Hash
             association_array(value, key.to_s)
           else
-            [key.to_s, [key, value].join(Ransack::Constants::UNDERSCORE)]
+            [key.to_s, [key, value].join(Constants::UNDERSCORE)]
           end
         end
       end
@@ -231,8 +233,10 @@ module Ransack
 
       def get_attribute_element(action, base)
         begin
-          [Translate.association(base, :context => object.context),
-            collection_for_base(action, base)]
+          [
+            Translate.association(base, :context => object.context),
+            collection_for_base(action, base)
+          ]
         rescue UntraversableAssociationError => e
           nil
         end
@@ -240,10 +244,10 @@ module Ransack
 
       def attribute_collection_for_base(attributes, base = nil)
         attributes.map do |c|
-          [attr_from_base_and_column(base, c),
+          [
+            attr_from_base_and_column(base, c),
             Translate.attribute(
-              attr_from_base_and_column(base, c),
-              :context => object.context
+              attr_from_base_and_column(base, c), :context => object.context
             )
           ]
         end
@@ -255,13 +259,11 @@ module Ransack
       end
 
       def attr_from_base_and_column(base, column)
-        [base, column].reject { |v| v.blank? }
-        .join(Ransack::Constants::UNDERSCORE)
+        [base, column].reject(&:blank?).join(Constants::UNDERSCORE)
       end
 
       def formbuilder_error_message(action)
-        "#{
-          action.sub(Ransack::Constants::SEARCH, Ransack::Constants::ATTRIBUTE)
+        "#{action.sub(Constants::SEARCH, Constants::ATTRIBUTE)
           } must be called inside a search FormBuilder!"
       end
 

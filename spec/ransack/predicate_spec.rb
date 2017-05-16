@@ -1,6 +1,9 @@
 require 'spec_helper'
 
 module Ransack
+  TRUE_VALUES  = [true,  1, '1', 't', 'T', 'true',  'TRUE'].to_set
+  FALSE_VALUES = [false, 0, '0', 'f', 'F', 'false', 'FALSE'].to_set
+
   describe Predicate do
 
     before do
@@ -13,25 +16,19 @@ module Ransack
         expect { subject.result }.to_not raise_error
       end
 
-      it "escapes '%', '.' and '\\\\' in value" do
+      it "escapes '%', '.', '_' and '\\\\' in value" do
         subject.send(:"#{method}=", '%._\\')
         expect(subject.result.to_sql).to match(regexp)
       end
     end
 
     describe 'eq' do
-      it 'generates an equality condition for boolean true' do
-        @s.awesome_eq = true
-        field = "#{quote_table_name("people")}.#{quote_column_name("awesome")}"
-        expect(@s.result.to_sql).to match /#{field} = #{
-          ActiveRecord::Base.connection.quoted_true}/
+      it 'generates an equality condition for boolean true values' do
+        test_boolean_equality_for(true)
       end
 
-      it 'generates an equality condition for boolean false' do
-        @s.awesome_eq = false
-        field = "#{quote_table_name("people")}.#{quote_column_name("awesome")}"
-        expect(@s.result.to_sql).to match /#{field} = #{
-          ActiveRecord::Base.connection.quoted_false}/
+      it 'generates an equality condition for boolean false values' do
+        test_boolean_equality_for(false)
       end
 
       it 'does not generate a condition for nil' do
@@ -127,9 +124,9 @@ module Ransack
     describe 'cont' do
       it_has_behavior 'wildcard escaping', :name_cont,
         (if ActiveRecord::Base.connection.adapter_name == "PostgreSQL"
-          /"people"."name" ILIKE '%\\%\\._\\\\%'/
+          /"people"."name" ILIKE '%\\%\\.\\_\\\\%'/
         elsif ActiveRecord::Base.connection.adapter_name == "Mysql2"
-          /`people`.`name` LIKE '%\\\\%\\\\._\\\\\\\\%'/
+          /`people`.`name` LIKE '%\\\\%\\\\.\\\\_\\\\\\\\%'/
         else
          /"people"."name" LIKE '%%._\\%'/
         end) do
@@ -146,9 +143,9 @@ module Ransack
     describe 'not_cont' do
       it_has_behavior 'wildcard escaping', :name_not_cont,
         (if ActiveRecord::Base.connection.adapter_name == "PostgreSQL"
-          /"people"."name" NOT ILIKE '%\\%\\._\\\\%'/
+          /"people"."name" NOT ILIKE '%\\%\\.\\_\\\\%'/
         elsif ActiveRecord::Base.connection.adapter_name == "Mysql2"
-          /`people`.`name` NOT LIKE '%\\\\%\\\\._\\\\\\\\%'/
+          /`people`.`name` NOT LIKE '%\\\\%\\\\.\\\\_\\\\\\\\%'/
         else
          /"people"."name" NOT LIKE '%%._\\%'/
         end) do
@@ -361,5 +358,31 @@ module Ransack
         expect(@s.result.to_sql).to match /#{field} IS NOT NULL AND #{field} != ''/
       end
     end
-  end
+
+    private
+
+      def test_boolean_equality_for(boolean_value)
+        query = expected_query(boolean_value)
+        test_values_for(boolean_value).each do |value|
+          s = Search.new(Person, awesome_eq: value)
+          expect(s.result.to_sql).to match query
+        end
+      end
+
+      def test_values_for(boolean_value)
+        case boolean_value
+        when true
+          TRUE_VALUES
+        when false
+          FALSE_VALUES
+        end
+      end
+
+      def expected_query(value, attribute = 'awesome', operator = '=')
+        field = "#{quote_table_name("people")}.#{quote_column_name(attribute)}"
+        quoted_value = ActiveRecord::Base.connection.quote(value)
+        /#{field} #{operator} #{quoted_value}/
+      end
+    end
+
 end

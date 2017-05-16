@@ -6,10 +6,6 @@ module Ransack
     module Mongoid
       class Context < ::Ransack::Context
 
-        # Because the AR::Associations namespace is insane
-        # JoinDependency = ::Mongoid::Associations::JoinDependency
-        # JoinPart = JoinDependency::JoinPart
-
         def initialize(object, options = {})
           super
           # @arel_visitor = @engine.connection.visitor
@@ -21,7 +17,7 @@ module Ransack
 
         def type_for(attr)
           return nil unless attr && attr.valid?
-          name    = attr.arel_attribute.name.to_s
+          name    = attr.arel_attribute.name.to_s.split('.').last
           # table   = attr.arel_attribute.relation.table_name
 
           # schema_cache = @engine.connection.schema_cache
@@ -38,7 +34,7 @@ module Ransack
 
           name = '_id' if name == 'id'
 
-          t = object.klass.fields[name].type
+          t = object.klass.fields[name].try(:type) || @bind_pairs[attr.name].first.fields[name].type
 
           t.to_s.demodulize.underscore.to_sym
         end
@@ -100,6 +96,14 @@ module Ransack
           end
         end
 
+        def lock_association(association)
+          warn "lock_association is not implemented for Ransack mongoid adapter" if $DEBUG
+        end
+
+        def remove_association(association)
+          warn "remove_association is not implemented for Ransack mongoid adapter" if $DEBUG
+        end
+
       private
 
         def get_parent_and_attribute_name(str, parent = @base)
@@ -114,10 +118,10 @@ module Ransack
               segments.pop) && segments.size > 0 && !found_assoc do
               assoc, klass = unpolymorphize_association(segments.join('_'))
               if found_assoc = get_association(assoc, parent)
-                join = build_or_find_association(found_assoc.name, parent, klass)
                 parent, attr_name = get_parent_and_attribute_name(
-                  remainder.join('_'), join
+                  remainder.join('_'), found_assoc.klass
                   )
+                attr_name = "#{segments.join('_')}.#{attr_name}"
               end
             end
           end
@@ -132,7 +136,7 @@ module Ransack
         end
 
         def join_dependency(relation)
-          if relation.respond_to?(:join_dependency) # Squeel will enable this
+          if relation.respond_to?(:join_dependency) # Polyamorous enables this
             relation.join_dependency
           else
             build_join_dependency(relation)
@@ -145,27 +149,27 @@ module Ransack
           buckets = relation.joins_values.group_by do |join|
             case join
             when String
-              'string_join'
+              Constants::STRING_JOIN
             when Hash, Symbol, Array
-              'association_join'
+              Constants::ASSOCIATION_JOIN
             when JoinDependency, JoinDependency::JoinAssociation
-              'stashed_join'
+              Constants::STASHED_JOIN
             when Arel::Nodes::Join
-              'join_node'
+              Constants::JOIN_NODE
             else
               raise 'unknown class: %s' % join.class.name
             end
           end
 
-          association_joins         = buckets['association_join'] || []
+          association_joins = buckets[Constants::ASSOCIATION_JOIN] || []
 
-          stashed_association_joins = buckets['stashed_join'] || []
+          stashed_association_joins = buckets[Constants::STASHED_JOIN] || []
 
-          join_nodes                = buckets['join_node'] || []
+          join_nodes = buckets[Constants::JOIN_NODE] || []
 
-          string_joins              = (buckets['string_join'] || [])
-                                      .map { |x| x.strip }
-                                      .uniq
+          string_joins = (buckets[Constants::STRING_JOIN] || [])
+            .map { |x| x.strip }
+            .uniq
 
           join_list = relation.send :custom_join_ast,
             relation.table.from(relation.table), string_joins

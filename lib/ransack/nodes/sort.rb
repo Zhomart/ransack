@@ -3,11 +3,12 @@ module Ransack
     class Sort < Node
       include Bindable
 
-      attr_reader :name, :dir
+      attr_reader :name, :dir, :ransacker_args
       i18n_word :asc, :desc
 
       class << self
         def extract(context, str)
+          return unless str
           attr, direction = str.split(/\s+/,2)
           self.new(context).build(name: attr, dir: direction)
         end
@@ -15,7 +16,7 @@ module Ransack
 
       def build(params)
         params.with_indifferent_access.each do |key, value|
-          if key.match(/^(name|dir)$/)
+          if key.match(/^(name|dir|ransacker_args)$/)
             self.send("#{key}=", value)
           end
         end
@@ -31,17 +32,21 @@ module Ransack
 
       def name=(name)
         @name = name
-        context.bind(self, name) unless name.blank?
+        context.bind(self, name)
       end
 
       def dir=(dir)
         dir = dir.downcase if dir
         @dir =
-          if Ransack::Constants::ASC_DESC.include?(dir)
+          if dir == 'asc'.freeze || dir == 'desc'.freeze
             dir
           else
-            Ransack::Constants::ASC
+            'asc'.freeze
           end
+      end
+
+      def ransacker_args=(ransack_args)
+        @ransacker_args = ransack_args
       end
 
     end

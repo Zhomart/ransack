@@ -27,8 +27,10 @@ module Ransack
       @join_dependency = join_dependency(@object)
       @join_type = options[:join_type] || Polyamorous::OuterJoin
       @search_key = options[:search_key] || Ransack.options[:search_key]
+      @associations_pot = {}
+      @lock_associations = []
 
-      if ::ActiveRecord::VERSION::STRING >= "4.1".freeze
+      if ::ActiveRecord::VERSION::STRING >= Constants::RAILS_4_1
         @base = @join_dependency.join_root
         @engine = @base.base_klass.arel_engine
       else
@@ -37,10 +39,10 @@ module Ransack
       end
 
       @default_table = Arel::Table.new(
-        @base.table_name, :as => @base.aliased_table_name, :engine => @engine
+        @base.table_name, as: @base.aliased_table_name, type_caster: self
         )
       @bind_pairs = Hash.new do |hash, key|
-        parent, attr_name = get_parent_and_attribute_name(key.to_s)
+        parent, attr_name = get_parent_and_attribute_name(key)
         if parent && attr_name
           hash[key] = [parent, attr_name]
         end

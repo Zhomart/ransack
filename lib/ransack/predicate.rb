@@ -10,7 +10,7 @@ module Ransack
       end
 
       def names_by_decreasing_length
-        names.sort { |a,b| b.length <=> a.length }
+        names.sort { |a, b| b.length <=> a.length }
       end
 
       def named(name)
@@ -19,7 +19,7 @@ module Ransack
 
       def detect_and_strip_from_string!(str)
         if p = detect_from_string(str)
-          str.sub! /_#{p}$/, Ransack::Constants::EMPTY
+          str.sub! /_#{p}$/, ''.freeze
           p
         end
       end
@@ -48,8 +48,8 @@ module Ransack
       @validator = opts[:validator] ||
         lambda { |v| v.respond_to?(:empty?) ? !v.empty? : !v.nil? }
       @compound = opts[:compound]
-      @wants_array = opts[:wants_array] == true || @compound ||
-        Ransack::Constants::IN_NOT_IN.include?(@arel_predicate)
+      @wants_array = opts.fetch(:wants_array,
+        @compound || Constants::IN_NOT_IN.include?(@arel_predicate))
     end
 
     def eql?(other)
@@ -71,7 +71,11 @@ module Ransack
     end
 
     def validate(vals, type = @type)
-      vals.select { |v| validator.call(type ? v.cast(type) : v.value) }.any?
+      vals.any? { |v| validator.call(type ? v.cast(type) : v.value) }
+    end
+
+    def negative?
+      @name.include?("not_".freeze)
     end
 
   end

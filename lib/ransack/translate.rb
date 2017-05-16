@@ -25,8 +25,7 @@ module Ransack
         |x| x.respond_to?(:model_name)
       }
       predicate = Predicate.detect_from_string(original_name)
-      attributes_str = original_name
-        .sub(/_#{predicate}$/, Ransack::Constants::EMPTY)
+      attributes_str = original_name.sub(/_#{predicate}$/, ''.freeze)
       attribute_names = attributes_str.split(/_and_|_or_/)
       combinator = attributes_str.match(/_and_/) ? :and : :or
       defaults = base_ancestors.map do |klass|
@@ -60,7 +59,8 @@ module Ransack
 
       defaults =
         if key.blank?
-          [:"#{context.klass.i18n_scope}.models.#{i18n_key(context.klass)}"]
+          [:"ransack.models.#{i18n_key(context.klass)}",
+           :"#{context.klass.i18n_scope}.models.#{i18n_key(context.klass)}"]
         else
           [:"ransack.associations.#{i18n_key(context.klass)}.#{key}"]
         end
@@ -74,7 +74,7 @@ module Ransack
     def self.attribute_name(context, name, include_associations = nil)
       @context, @name = context, name
       @assoc_path = context.association_path(name)
-      @attr_name = @name.sub(/^#{@assoc_path}_/, Ransack::Constants::EMPTY)
+      @attr_name = @name.sub(/^#{@assoc_path}_/, ''.freeze)
       associated_class = @context.traverse(@assoc_path) if @assoc_path.present?
       @include_associated = include_associations && associated_class
 
@@ -150,11 +150,6 @@ module Ransack
     end
 
     def self.i18n_key(klass)
-      # if ActiveRecord::VERSION::MAJOR == 3 && ActiveRecord::VERSION::MINOR == 0
-      #   klass.model_name.i18n_key.to_s.tr('.', '/')
-      # else
-      #   klass.model_name.i18n_key.to_s
-      # end
       raise "not implemented"
     end
   end

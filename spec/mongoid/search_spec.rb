@@ -54,7 +54,6 @@ module Ransack
         it 'creates conditions for association attributes' do
           search = Search.new(Person, :children_name_eq => 'Ernie')
           condition = search.base[:children_name_eq]
-          binding.pry
           expect(condition).to be_a Nodes::Condition
           expect(condition.predicate.name).to eq 'eq'
           expect(condition.attributes.first.name).to eq 'children_name'
@@ -175,7 +174,7 @@ module Ransack
 
         context "when ignore_unknown_conditions is false" do
           before do
-            Ransack.configure { |config| config.ignore_unknown_conditions = false }
+            Ransack.configure { |c| c.ignore_unknown_conditions = false }
           end
 
           specify { expect { subject }.to raise_error ArgumentError }
@@ -183,7 +182,7 @@ module Ransack
 
         context "when ignore_unknown_conditions is true" do
           before do
-            Ransack.configure { |config| config.ignore_unknown_conditions = true }
+            Ransack.configure { |c| c.ignore_unknown_conditions = true }
           end
 
           specify { expect { subject }.not_to raise_error }
@@ -434,7 +433,6 @@ module Ransack
       end
 
       context 'with joins' do
-        before { pending 'not implemented for mongoid' }
         it 'allows chaining to access nested conditions' do
           @s.groupings = [
             { :m => 'or', :name_eq => 'Ernie', :children_name_eq => 'Ernie' }

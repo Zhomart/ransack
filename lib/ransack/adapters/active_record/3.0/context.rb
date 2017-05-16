@@ -7,9 +7,11 @@ module Ransack
   module Adapters
     module ActiveRecord
       class Context < ::Ransack::Context
+
         # Because the AR::Associations namespace is insane
-        JoinDependency = ::ActiveRecord::Associations::ClassMethods::JoinDependency
-        JoinBase = JoinDependency::JoinBase
+        if defined? ::ActiveRecord::Associations::ClassMethods::JoinDependency
+          JoinDependency = ::ActiveRecord::Associations::ClassMethods::JoinDependency
+        end
 
         # Redefine a few things for ActiveRecord 3.0.
 
@@ -30,10 +32,8 @@ module Ransack
             .reorder(viz.accept(search.sorts))
           end
           if opts[:distinct]
-            relation.select(
-              Ransack::Constants::DISTINCT + @klass.quoted_table_name +
-              '.*'.freeze
-              )
+            relation.select(Constants::DISTINCT + @klass.quoted_table_name +
+              Constants::DOT_ASTERIX)
           else
             relation
           end
@@ -50,11 +50,11 @@ module Ransack
             while !found_assoc && remainder.unshift(segments.pop) &&
               segments.size > 0 do
               assoc, poly_class = unpolymorphize_association(
-                segments.join(Ransack::Constants::UNDERSCORE)
+                segments.join(Constants::UNDERSCORE)
                 )
               if found_assoc = get_association(assoc, klass)
                 exists = attribute_method?(
-                  remainder.join(Ransack::Constants::UNDERSCORE),
+                  remainder.join(Constants::UNDERSCORE),
                   poly_class || found_assoc.klass
                   )
               end
@@ -104,14 +104,14 @@ module Ransack
             while remainder.unshift(segments.pop) && segments.size > 0 &&
               !found_assoc do
               assoc, klass = unpolymorphize_association(
-                segments.join(Ransack::Constants::UNDERSCORE)
+                segments.join(Constants::UNDERSCORE)
                 )
               if found_assoc = get_association(assoc, parent)
                 join = build_or_find_association(
                   found_assoc.name, parent, klass
                   )
                 parent, attr_name = get_parent_and_attribute_name(
-                  remainder.join(Ransack::Constants::UNDERSCORE), join
+                  remainder.join(Constants::UNDERSCORE), join
                   )
               end
             end
@@ -126,7 +126,7 @@ module Ransack
         end
 
         def join_dependency(relation)
-          if relation.respond_to?(:join_dependency) # Squeel will enable this
+          if relation.respond_to?(:join_dependency) # Polyamorous enables this
             relation.join_dependency
           else
             build_join_dependency(relation)
@@ -137,31 +137,25 @@ module Ransack
           buckets = relation.joins_values.group_by do |join|
             case join
             when String
-              Ransack::Constants::STRING_JOIN
+              Constants::STRING_JOIN
             when Hash, Symbol, Array
-              Ransack::Constants::ASSOCIATION_JOIN
+              Constants::ASSOCIATION_JOIN
             when ::ActiveRecord::Associations::ClassMethods::JoinDependency::JoinAssociation
-              Ransack::Constants::STASHED_JOIN
+              Constants::STASHED_JOIN
             when Arel::Nodes::Join
-              Ransack::Constants::JOIN_NODE
+              Constants::JOIN_NODE
             else
               raise 'unknown class: %s' % join.class.name
             end
           end
 
-          association_joins =
-            buckets[Ransack::Constants::ASSOCIATION_JOIN] || []
+          association_joins = buckets[Constants::ASSOCIATION_JOIN] || []
 
-          stashed_association_joins =
-            buckets[Ransack::Constants::STASHED_JOIN] || []
+          stashed_association_joins = buckets[Constants::STASHED_JOIN] || []
 
-          join_nodes =
-            buckets[Ransack::Constants::JOIN_NODE] || []
+          join_nodes = buckets[Constants::JOIN_NODE] || []
 
-          string_joins =
-            (buckets[Ransack::Constants::STRING_JOIN] || [])
-            .map { |x| x.strip }
-            .uniq
+          string_joins = (buckets[Constants::STRING_JOIN] || []).map(&:strip).uniq
 
           join_list = relation.send :custom_join_sql, (string_joins + join_nodes)
 
@@ -190,21 +184,17 @@ module Ransack
               :build, Polyamorous::Join.new(name, @join_type, klass), parent
               )
             found_association = @join_dependency.join_associations.last
-            apply_default_conditions(found_association)
+
+            default_conditions = found_association.active_record.scoped.arel.constraints
+            if default_conditions.any?
+              and_default_conditions = "AND #{default_conditions.reduce(&:and).to_sql}"
+            end
+
             # Leverage the stashed association functionality in AR
-            @object = @object.joins(found_association)
+            @object = @object.joins(found_association).joins(and_default_conditions)
           end
 
           found_association
-        end
-
-        def apply_default_conditions(join_association)
-          reflection = join_association.reflection
-          default_scope = join_association.active_record.scoped
-          default_conditions = default_scope.arel.where_clauses
-          if default_conditions.any?
-            reflection.options[:conditions] = default_conditions
-          end
         end
 
       end

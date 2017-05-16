@@ -3,13 +3,13 @@ gemspec
 
 gem 'rake'
 
-rails = ENV['RAILS'] || 'master'
+rails = ENV['RAILS'] || '5-0-stable'
 
-if rails[0,3] == '4.2' || rails == 'master'
-  gem 'arel', github: 'rails/arel', branch: 'master'
+if rails == 'master'
+  gem 'polyamorous', github: 'activerecord-hackery/polyamorous'
+else
+  gem 'polyamorous', '~> 1.3'
 end
-
-gem 'polyamorous', '~> 1.1'
 
 gem 'pry'
 
@@ -40,6 +40,15 @@ else
   end
 end
 
-if ENV['DB'] =~ /mongodb/
+if ENV['DB'] =~ /mongoid4/
   gem 'mongoid', '~> 4.0.0', require: false
+end
+
+if ENV['DB'] =~ /mongoid5/
+  gem 'mongoid', '~> 5.0.0', require: false
+end
+
+group :test do
+  # TestUnit was removed from Ruby 2.2 but still needed for testing Rails 3.x.
+  gem 'test-unit', '~> 3.0' if RUBY_VERSION >= '2.2'
 end

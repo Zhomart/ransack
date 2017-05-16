@@ -20,7 +20,9 @@ module Ransack
 
           context 'with scopes' do
             before do
-              Person.stub :ransackable_scopes => [:active, :over_age]
+              allow(Person)
+              .to receive(:ransackable_scopes)
+              .and_return([:active, :over_age])
             end
 
             it "applies true scopes" do
@@ -47,6 +49,42 @@ module Ransack
               search = Person.search('over_age' => 18, 'active' => true)
               expect(search.result.selector).to eq({ 'age' => { '$gt' => 18 }, 'active' => 1 })
             end
+          end
+        end
+
+        describe '#ransack_alias' do
+          it 'translates an alias to the correct attributes' do
+            p = Person.create!(name: 'Meatloaf', email: 'babies@example.com')
+
+            s = Person.ransack(term_cont: 'atlo')
+            expect(s.result.to_a).to eq [p]
+
+            s = Person.ransack(term_cont: 'babi')
+            expect(s.result.to_a).to eq [p]
+
+            s = Person.ransack(term_cont: 'nomatch')
+            expect(s.result.to_a).to eq []
+          end
+
+          it 'makes aliases available to subclasses' do
+            yngwie = Musician.create!(name: 'Yngwie Malmsteen')
+
+            musicians = Musician.ransack(term_cont: 'ngw').result
+            expect(musicians).to eq([yngwie])
+          end
+
+          it 'handles naming collisions gracefully' do
+            frank = Person.create!(name: 'Frank Stallone')
+
+            people = Person.ransack(term_cont: 'allon').result
+            expect(people).to eq([frank])
+
+            Class.new(Article) do
+              ransack_alias :term, :title
+            end
+
+            people = Person.ransack(term_cont: 'allon').result
+            expect(people).to eq([frank])
           end
         end
 
@@ -213,6 +251,7 @@ module Ransack
             it { should include 'name' }
             it { should include 'reversed_name' }
             it { should include 'doubled_name' }
+            it { should include 'term' }
             it { should include 'only_search' }
             it { should_not include 'only_sort' }
             it { should_not include 'only_admin' }
@@ -224,6 +263,7 @@ module Ransack
             it { should include 'name' }
             it { should include 'reversed_name' }
             it { should include 'doubled_name' }
+            it { should include 'term' }
             it { should include 'only_search' }
             it { should_not include 'only_sort' }
             it { should include 'only_admin' }
@@ -255,8 +295,6 @@ module Ransack
         end
 
         describe '#ransackable_associations' do
-          before { pending "not implemented for mongoid" }
-
           subject { Person.ransackable_associations }
 
           it { should include 'parent' }

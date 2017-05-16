@@ -1,11 +1,9 @@
 require 'ransack/visitor'
-require 'ransack/adapters/active_record/ransack/visitor' if defined?(::ActiveRecord::Base)
-require 'ransack/adapters/mongoid/ransack/visitor' if defined?(::Mongoid)
+Ransack::Adapters.object_mapper.require_context
 
 module Ransack
   class Context
-    attr_reader :search, :object, :klass, :base, :engine
-    attr_reader :object, :klass, :base, :engine, :arel_visitor
+    attr_reader :search, :object, :klass, :base, :engine, :arel_visitor
     attr_accessor :auth_object, :search_key
 
     class << self
@@ -19,9 +17,12 @@ module Ransack
       end
 
       def for(object, options = {})
-        context = Class === object ?
-          for_class(object, options) :
-          for_object(object, options)
+        context =
+          if Class === object
+            for_class(object, options)
+          else
+            for_object(object, options)
+          end
         context or raise ArgumentError,
           "Don't know what context to use for #{object}"
       end
@@ -57,11 +58,12 @@ module Ransack
     end
 
     def bind(object, str)
+      return nil unless str
       object.parent, object.attr_name = @bind_pairs[str]
     end
 
     def traverse(str, base = @base)
-      str ||= Ransack::Constants::EMPTY
+      str ||= ''.freeze
 
       if (segments = str.split(/_/)).size > 0
         remainder = []
@@ -69,13 +71,13 @@ module Ransack
         while !found_assoc && segments.size > 0 do
           # Strip the _of_Model_type text from the association name, but hold
           # onto it in klass, for use as the next base
-          assoc, klass = unpolymorphize_association(segments
-                         .join(Ransack::Constants::UNDERSCORE))
+          assoc, klass = unpolymorphize_association(
+            segments.join('_'.freeze)
+            )
           if found_assoc = get_association(assoc, base)
             base = traverse(
-              remainder.join(
-                Ransack::Constants::UNDERSCORE), klass || found_assoc.klass
-                )
+              remainder.join('_'.freeze), klass || found_assoc.klass
+              )
           end
 
           remainder.unshift segments.pop
@@ -89,16 +91,16 @@ module Ransack
 
     def association_path(str, base = @base)
       base = klassify(base)
-      str ||= Ransack::Constants::EMPTY
+      str ||= ''.freeze
       path = []
       segments = str.split(/_/)
       association_parts = []
       if (segments = str.split(/_/)).size > 0
         while segments.size > 0 &&
-        !base.columns_hash[segments.join(Ransack::Constants::UNDERSCORE)] &&
+        !base.columns_hash[segments.join(Constants::UNDERSCORE)] &&
         association_parts << segments.shift do
           assoc, klass = unpolymorphize_association(
-            association_parts.join(Ransack::Constants::UNDERSCORE)
+            association_parts.join(Constants::UNDERSCORE)
             )
           if found_assoc = get_association(assoc, base)
             path += association_parts
@@ -108,7 +110,7 @@ module Ransack
         end
       end
 
-      path.join(Ransack::Constants::UNDERSCORE)
+      path.join(Constants::UNDERSCORE)
     end
 
     def unpolymorphize_association(str)
@@ -117,6 +119,10 @@ module Ransack
       else
         [str, nil]
       end
+    end
+
+    def ransackable_alias(str)
+      klass._ransack_aliases.fetch(str, str)
     end
 
     def ransackable_attribute?(str, klass)
@@ -132,15 +138,15 @@ module Ransack
       klass.ransackable_scopes(auth_object).any? { |s| s.to_s == str }
     end
 
-    def searchable_attributes(str = Ransack::Constants::EMPTY)
+    def searchable_attributes(str = ''.freeze)
       traverse(str).ransackable_attributes(auth_object)
     end
 
-    def sortable_attributes(str = Ransack::Constants::EMPTY)
+    def sortable_attributes(str = ''.freeze)
       traverse(str).ransortable_attributes(auth_object)
     end
 
-    def searchable_associations(str = Ransack::Constants::EMPTY)
+    def searchable_associations(str = ''.freeze)
       traverse(str).ransackable_associations(auth_object)
     end
   end

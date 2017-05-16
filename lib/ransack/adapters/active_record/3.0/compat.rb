@@ -16,9 +16,12 @@ end
 
 class ::ActiveRecord::Associations::ClassMethods::JoinDependency::JoinBase
   def table
-    Arel::Table.new(table_name, :as      => aliased_table_name,
-                                :engine  => active_record.arel_engine,
-                                :columns => active_record.columns)
+    Arel::Table.new(
+      table_name,
+      :as      => aliased_table_name,
+      :engine  => active_record.arel_engine,
+      :columns => active_record.columns
+      )
   end
 end
 
@@ -120,9 +123,9 @@ module Arel
       def column_cache
         @column_cache ||= Hash.new do |hash, key|
           hash[key] = Hash[
-            @engine.connection.columns(key, "#{key} Columns").map do |c|
-              [c.name, c]
-            end
+            @engine.connection
+            .columns(key, "#{key} Columns")
+            .map { |c| [c.name, c] }
           ]
         end
       end
@@ -135,11 +138,11 @@ module Arel
         "#{
           o.name
           }(#{
-          o.distinct ? Ransack::Constants::DISTINCT : Ransack::Constants::EMPTY
+          o.distinct ? Ransack::Constants::DISTINCT : ''.freeze
           }#{
-          o.expressions.map { |x| visit x }.join(Ransack::Constants::COMMA_SPACE)
+          o.expressions.map { |x| visit x }.join(', '.freeze)
           })#{
-          o.alias ? " AS #{visit o.alias}" : Ransack::Constants::EMPTY
+          o.alias ? " AS #{visit o.alias}" : ''.freeze
           }"
       end
 
@@ -161,7 +164,7 @@ module Arel
             quote(value, attr && column_for(attr))
           end
         }
-        .join(Ransack::Constants::COMMA_SPACE)
+        .join(', '.freeze)
         })"
       end
     end
